@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { createBrowserRouter, Navigate } from 'react-router';
 import { Landing } from './pages/Landing';
 import { Login } from './pages/Login';
@@ -8,36 +9,46 @@ import { ListingDetails } from './pages/ListingDetails';
 import { Dashboard } from './pages/Dashboard';
 import { CreateListing } from './pages/CreateListing';
 import { Profile } from './pages/Profile';
-import { getCurrentUser } from './utils/mockData';
+import { useAuth } from './context/AuthContext';
 
-// Route guard component
-function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const currentUser = getCurrentUser();
-  
-  if (!currentUser) {
+function LoadingScreen() {
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-background text-text-secondary">
+      Loading…
+    </div>
+  );
+}
+
+function ProtectedRoute({ children }: { children: ReactNode }) {
+  const { user, loading } = useAuth();
+
+  if (loading) {
+    return <LoadingScreen />;
+  }
+  if (!user) {
     return <Navigate to="/login" replace />;
   }
-  
+
   return <>{children}</>;
 }
 
-// Public route component (redirect to home if already logged in)
-function PublicRoute({ children }: { children: React.ReactNode }) {
-  const currentUser = getCurrentUser();
-  
-  if (currentUser) {
+function PublicRoute({ children }: { children: ReactNode }) {
+  const { user, loading } = useAuth();
+
+  if (loading) {
+    return <LoadingScreen />;
+  }
+  if (user) {
     return <Navigate to="/" replace />;
   }
-  
+
   return <>{children}</>;
 }
 
 export const router = createBrowserRouter([
   {
     path: '/',
-    element: (
-      <LandingOrHome />
-    ),
+    element: <LandingOrHome />,
   },
   {
     path: '/login',
@@ -101,13 +112,15 @@ export const router = createBrowserRouter([
   },
 ]);
 
-// Component to show Landing for logged-out users, Home for logged-in users
 function LandingOrHome() {
-  const currentUser = getCurrentUser();
-  
-  if (!currentUser) {
+  const { user, loading } = useAuth();
+
+  if (loading) {
+    return <LoadingScreen />;
+  }
+  if (!user) {
     return <Landing />;
   }
-  
+
   return <Home />;
 }

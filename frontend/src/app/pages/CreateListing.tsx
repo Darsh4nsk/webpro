@@ -1,14 +1,15 @@
 import { useState, FormEvent } from 'react';
 import { useNavigate } from 'react-router';
 import { Navbar } from '../components/Navbar';
-import { getCurrentUser, addListing } from '../utils/mockData';
+import { useAuth } from '../context/AuthContext';
+import { createListing } from '../lib/api';
 import { Category } from '../types';
 import { ArrowLeft } from 'lucide-react';
 
 export function CreateListing() {
   const navigate = useNavigate();
-  const currentUser = getCurrentUser();
-  
+  const { user } = useAuth();
+
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [category, setCategory] = useState<Category>('physical');
@@ -16,8 +17,9 @@ export function CreateListing() {
   const [price, setPrice] = useState('');
   const [conditions, setConditions] = useState('');
   const [error, setError] = useState('');
+  const [submitting, setSubmitting] = useState(false);
 
-  const handleSubmit = (e: FormEvent) => {
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError('');
 
@@ -31,35 +33,32 @@ export function CreateListing() {
       return;
     }
 
-    if (!currentUser) {
-      setError('You must be logged in to create a listing');
-      return;
+    setSubmitting(true);
+    try {
+      const newListing = await createListing({
+        title,
+        description,
+        category,
+        isPaid,
+        price: isPaid ? parseFloat(price) : undefined,
+        conditions,
+      });
+      navigate(`/listing/${newListing.id}`);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to create listing');
+    } finally {
+      setSubmitting(false);
     }
-
-    const newListing = addListing({
-      title,
-      description,
-      category,
-      isPaid,
-      price: isPaid ? parseFloat(price) : undefined,
-      conditions,
-      status: 'available',
-      ownerId: currentUser.id,
-      ownerName: currentUser.name,
-      communityId: currentUser.communityId,
-      communityName: currentUser.communityName,
-    });
-
-    navigate(`/listing/${newListing.id}`);
   };
 
   return (
     <div className="min-h-screen bg-background">
       <Navbar />
-      
+
       <div className="pt-16">
         <div className="max-w-[700px] mx-auto px-6 py-8">
           <button
+            type="button"
             onClick={() => navigate('/dashboard')}
             className="flex items-center gap-2 text-text-secondary hover:text-text-primary transition-colors mb-6 text-[15px]"
           >
@@ -70,19 +69,16 @@ export function CreateListing() {
           <div className="mb-8">
             <h1 className="mb-2">Create New Listing</h1>
             <p className="text-text-secondary text-[15px]">
-              Share a resource with your {currentUser?.communityName} community
+              Share a resource with your {user?.communityName} community
             </p>
           </div>
 
           <div className="bg-surface border border-border rounded-lg p-8">
             <form onSubmit={handleSubmit} className="space-y-6">
               {error && (
-                <div className="bg-red-50 text-red-700 px-4 py-3 rounded text-[14px]">
-                  {error}
-                </div>
+                <div className="bg-red-50 text-red-700 px-4 py-3 rounded text-[14px]">{error}</div>
               )}
 
-              {/* Category Selection */}
               <div>
                 <label className="block text-[14px] font-medium mb-3">
                   Category <span className="text-red-500">*</span>
@@ -127,7 +123,6 @@ export function CreateListing() {
                 </div>
               </div>
 
-              {/* Title */}
               <div>
                 <label htmlFor="title" className="block text-[14px] font-medium mb-2">
                   Title <span className="text-red-500">*</span>
@@ -142,7 +137,6 @@ export function CreateListing() {
                 />
               </div>
 
-              {/* Description */}
               <div>
                 <label htmlFor="description" className="block text-[14px] font-medium mb-2">
                   Description <span className="text-red-500">*</span>
@@ -157,7 +151,6 @@ export function CreateListing() {
                 />
               </div>
 
-              {/* Conditions */}
               <div>
                 <label htmlFor="conditions" className="block text-[14px] font-medium mb-2">
                   Conditions <span className="text-red-500">*</span>
@@ -172,7 +165,6 @@ export function CreateListing() {
                 />
               </div>
 
-              {/* Paid/Free Toggle */}
               <div className="bg-background border border-border rounded-lg p-4">
                 <div className="flex items-center justify-between mb-3">
                   <div>
@@ -220,11 +212,11 @@ export function CreateListing() {
                 )}
               </div>
 
-              {/* Submit Button */}
               <div className="flex gap-3 pt-4">
                 <button
                   type="submit"
-                  className="flex-1 bg-primary text-primary-foreground py-3 rounded font-medium hover:bg-primary-hover transition-colors text-[15px]"
+                  disabled={submitting}
+                  className="flex-1 bg-primary text-primary-foreground py-3 rounded font-medium hover:bg-primary-hover transition-colors text-[15px] disabled:opacity-60"
                 >
                   Create Listing
                 </button>

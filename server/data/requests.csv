@@ -1,0 +1,3 @@
+"id","listingId","listingTitle","requesterId","requesterName","ownerId","status","createdAt","message"
+"1","4","Scientific Calculator (TI-84)","demo-requester-1","Demo User","demo-owner-2","approved","2026-02-22T10:00:00Z","Need it for the calculus exam next week"
+"2","1","Introduction to Algorithms (CLRS)","demo-requester-7","David Kim","demo-owner-2","pending","2026-02-24T14:00:00Z","Would love to borrow this for the semester project"

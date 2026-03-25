@@ -1,7 +1,11 @@
 import { useState, FormEvent } from 'react';
 import { useNavigate, Link } from 'react-router';
-import { setCurrentUser, mockCommunities } from '../utils/mockData';
-import { User } from '../types';
+import { createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
+import { doc, setDoc } from 'firebase/firestore';
+import { auth, db, isFirebaseConfigured } from '../lib/firebase';
+import { FirebaseConfigMissing } from '../components/FirebaseConfigMissing';
+import { formatFirebaseAuthError } from '../lib/authErrors';
+import { mockCommunities } from '../lib/communities';
 import { Sparkles, ArrowRight } from 'lucide-react';
 import { motion } from 'motion/react';
 
@@ -12,8 +16,9 @@ export function Signup() {
   const [password, setPassword] = useState('');
   const [communityId, setCommunityId] = useState('');
   const [error, setError] = useState('');
+  const [submitting, setSubmitting] = useState(false);
 
-  const handleSubmit = (e: FormEvent) => {
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError('');
 
@@ -22,29 +27,42 @@ export function Signup() {
       return;
     }
 
-    const selectedCommunity = mockCommunities.find(c => c.id === communityId);
-    
+    const selectedCommunity = mockCommunities.find((c) => c.id === communityId);
+
     if (!selectedCommunity) {
       setError('Please select a valid college');
       return;
     }
 
-    // Mock signup - in production, this would call an API
-    const newUser: User = {
-      id: Date.now().toString(),
-      name,
-      email,
-      communityId: selectedCommunity.id,
-      communityName: selectedCommunity.name,
-    };
+    if (password.length < 6) {
+      setError('Password must be at least 6 characters (Firebase requirement).');
+      return;
+    }
 
-    setCurrentUser(newUser);
-    navigate('/');
+    setSubmitting(true);
+    try {
+      const cred = await createUserWithEmailAndPassword(auth, email.trim(), password);
+      await updateProfile(cred.user, { displayName: name });
+      await setDoc(doc(db, 'users', cred.user.uid), {
+        name,
+        email,
+        communityId: selectedCommunity.id,
+        communityName: selectedCommunity.name,
+      });
+      navigate('/');
+    } catch (err: unknown) {
+      setError(formatFirebaseAuthError(err));
+    } finally {
+      setSubmitting(false);
+    }
   };
+
+  if (!isFirebaseConfigured || !auth || !db) {
+    return <FirebaseConfigMissing />;
+  }
 
   return (
     <div className="min-h-screen relative overflow-hidden flex items-center justify-center px-4 py-12">
-      {/* Animated Background */}
       <div className="fixed inset-0 -z-10">
         <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-primary/20 rounded-full blur-3xl animate-pulse" />
         <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-secondary/20 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '1s' }} />
@@ -138,11 +156,11 @@ export function Signup() {
                 id="community"
                 value={communityId}
                 onChange={(e) => setCommunityId(e.target.value)}
-                className="w-full px-4 py-3.5 bg-white/50 border-2 border-border-default rounded-xl focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-all text-[15px] text-text-primary"
+                className="w-full px-4 py-3.5 bg-surface border-2 border-border-default rounded-xl focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-all text-[15px] text-text-primary"
               >
                 <option value="" className="text-text-tertiary">Choose your college...</option>
                 {mockCommunities.map((community) => (
-                  <option key={community.id} value={community.id}>
+                  <option key={community.id} value={community.id} className="text-text-primary">
                     {community.name}
                   </option>
                 ))}
@@ -151,7 +169,8 @@ export function Signup() {
 
             <button
               type="submit"
-              className="w-full bg-gradient-to-r from-primary to-secondary text-white py-3.5 rounded-xl font-semibold hover:shadow-xl hover:scale-[1.02] transition-all text-[15px] flex items-center justify-center gap-2 group mt-6"
+              disabled={submitting}
+              className="w-full bg-gradient-to-r from-primary to-secondary text-white py-3.5 rounded-xl font-semibold hover:shadow-xl hover:scale-[1.02] transition-all text-[15px] flex items-center justify-center gap-2 group mt-6 disabled:opacity-60"
             >
               Create Account
               <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />

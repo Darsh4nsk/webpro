@@ -1,64 +1,95 @@
-import { useState, useMemo } from 'react';
-import { useNavigate } from 'react-router';
+import React, { useState, useMemo, useEffect } from 'react';
+import { useNavigate, Link } from 'react-router';
 import { Navbar } from '../components/Navbar';
 import { CategoryBadge } from '../components/CategoryBadge';
 import { StatusBadge } from '../components/StatusBadge';
-import { getListings, getCurrentUser } from '../utils/mockData';
+import { useAuth } from '../context/AuthContext';
+import { fetchListings } from '../lib/api';
+import type { Listing } from '../types';
 import { Category } from '../types';
 import { Search, SlidersHorizontal } from 'lucide-react';
 
 export function Browse() {
   const navigate = useNavigate();
-  const currentUser = getCurrentUser();
-  const listings = getListings();
-  
+  const { user } = useAuth();
+  const [listings, setListings] = useState<Listing[]>([]);
+  const [loadError, setLoadError] = useState<string | null>(null);
+
   const [searchQuery, setSearchQuery] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<Category | 'all'>('all');
   const [availabilityFilter, setAvailabilityFilter] = useState<'all' | 'available' | 'unavailable'>('all');
   const [paidFilter, setPaidFilter] = useState<'all' | 'free' | 'paid'>('all');
   const [showFilters, setShowFilters] = useState(false);
 
-  // Filter listings based on current user's community
-  const communityListings = useMemo(() => {
-    return listings.filter(listing => listing.communityId === currentUser?.communityId);
-  }, [listings, currentUser]);
+  useEffect(() => {
+    if (!user?.communityId?.trim()) {
+      setListings([]);
+      setLoadError(null);
+      return;
+    }
+    let cancelled = false;
+    setLoadError(null);
+    fetchListings()
+      .then((data) => {
+        if (!cancelled) setListings(data);
+      })
+      .catch((e: Error) => {
+        if (!cancelled) setLoadError(e.message);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id, user?.communityId]);
 
-  // Apply filters
   const filteredListings = useMemo(() => {
-    return communityListings.filter(listing => {
-      // Search filter
-      const matchesSearch = listing.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                           listing.description.toLowerCase().includes(searchQuery.toLowerCase());
-      
-      // Category filter
+    return listings.filter((listing) => {
+      const matchesSearch =
+        listing.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        listing.description.toLowerCase().includes(searchQuery.toLowerCase());
+
       const matchesCategory = categoryFilter === 'all' || listing.category === categoryFilter;
-      
-      // Availability filter
-      const matchesAvailability = availabilityFilter === 'all' || listing.status === availabilityFilter;
-      
-      // Paid filter
-      const matchesPaid = paidFilter === 'all' || 
-                         (paidFilter === 'free' && !listing.isPaid) ||
-                         (paidFilter === 'paid' && listing.isPaid);
-      
+
+      const matchesAvailability =
+        availabilityFilter === 'all' || listing.status === availabilityFilter;
+
+      const matchesPaid =
+        paidFilter === 'all' ||
+        (paidFilter === 'free' && !listing.isPaid) ||
+        (paidFilter === 'paid' && listing.isPaid);
+
       return matchesSearch && matchesCategory && matchesAvailability && matchesPaid;
     });
-  }, [communityListings, searchQuery, categoryFilter, availabilityFilter, paidFilter]);
+  }, [listings, searchQuery, categoryFilter, availabilityFilter, paidFilter]);
 
   return (
     <div className="min-h-screen bg-background">
       <Navbar />
-      
+
       <div className="pt-16">
         <div className="max-w-[1100px] mx-auto px-6 py-8">
           <div className="mb-8">
             <h1 className="mb-2">Browse Resources</h1>
             <p className="text-text-secondary text-[15px]">
-              Discover resources shared by your {currentUser?.communityName} community
+              Discover resources shared by your {user?.communityName} community
             </p>
           </div>
 
-          {/* Search and Filter Bar */}
+          {loadError && (
+            <div className="mb-4 bg-error/10 text-error px-4 py-3 rounded-lg text-[14px] border border-error/20">
+              {loadError}
+            </div>
+          )}
+
+          {!user?.communityId?.trim() && (
+            <div className="mb-4 bg-amber-50 text-amber-950 px-4 py-3 rounded-lg text-[14px] border border-amber-200">
+              Set your college on{' '}
+              <Link to="/profile" className="font-semibold underline">
+                Profile
+              </Link>{' '}
+              to browse resources.
+            </div>
+          )}
+
           <div className="mb-8 space-y-4">
             <div className="flex gap-3">
               <div className="flex-1 relative">
@@ -72,6 +103,7 @@ export function Browse() {
                 />
               </div>
               <button
+                type="button"
                 onClick={() => setShowFilters(!showFilters)}
                 className={`px-4 py-2.5 bg-surface border border-border rounded font-medium hover:bg-gray-50 transition-colors text-[15px] flex items-center gap-2 ${showFilters ? 'bg-gray-50' : ''}`}
               >
@@ -80,7 +112,6 @@ export function Browse() {
               </button>
             </div>
 
-            {/* Filter Options */}
             {showFilters && (
               <div className="bg-surface border border-border rounded-lg p-6 grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div>
@@ -88,7 +119,7 @@ export function Browse() {
                   <select
                     value={categoryFilter}
                     onChange={(e) => setCategoryFilter(e.target.value as Category | 'all')}
-                    className="w-full px-3 py-2 bg-background border border-border rounded focus:outline-none focus:ring-2 focus:ring-primary text-[14px]"
+                    className="w-full px-3 py-2 bg-surface border border-border rounded focus:outline-none focus:ring-2 focus:ring-primary text-[14px] text-text-primary"
                   >
                     <option value="all">All Categories</option>
                     <option value="physical">Physical</option>
@@ -101,8 +132,10 @@ export function Browse() {
                   <label className="block text-[14px] font-medium mb-2">Availability</label>
                   <select
                     value={availabilityFilter}
-                    onChange={(e) => setAvailabilityFilter(e.target.value as 'all' | 'available' | 'unavailable')}
-                    className="w-full px-3 py-2 bg-background border border-border rounded focus:outline-none focus:ring-2 focus:ring-primary text-[14px]"
+                    onChange={(e) =>
+                      setAvailabilityFilter(e.target.value as 'all' | 'available' | 'unavailable')
+                    }
+                    className="w-full px-3 py-2 bg-surface border border-border rounded focus:outline-none focus:ring-2 focus:ring-primary text-[14px] text-text-primary"
                   >
                     <option value="all">All</option>
                     <option value="available">Available</option>
@@ -115,7 +148,7 @@ export function Browse() {
                   <select
                     value={paidFilter}
                     onChange={(e) => setPaidFilter(e.target.value as 'all' | 'free' | 'paid')}
-                    className="w-full px-3 py-2 bg-background border border-border rounded focus:outline-none focus:ring-2 focus:ring-primary text-[14px]"
+                    className="w-full px-3 py-2 bg-surface border border-border rounded focus:outline-none focus:ring-2 focus:ring-primary text-[14px] text-text-primary"
                   >
                     <option value="all">All</option>
                     <option value="free">Free</option>
@@ -126,14 +159,13 @@ export function Browse() {
             )}
           </div>
 
-          {/* Results Count */}
           <div className="mb-4">
             <p className="text-text-secondary text-[14px]">
-              Showing {filteredListings.length} {filteredListings.length === 1 ? 'resource' : 'resources'}
+              Showing {filteredListings.length}{' '}
+              {filteredListings.length === 1 ? 'resource' : 'resources'}
             </p>
           </div>
 
-          {/* Listings Grid */}
           {filteredListings.length === 0 ? (
             <div className="bg-surface border border-border rounded-lg p-12 text-center">
               <p className="text-text-secondary text-[15px]">
@@ -145,6 +177,13 @@ export function Browse() {
               {filteredListings.map((listing) => (
                 <div
                   key={listing.id}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      navigate(`/listing/${listing.id}`);
+                    }
+                  }}
                   className="bg-surface border border-border rounded-lg p-6 hover:shadow-md transition-all hover:scale-[1.02] cursor-pointer"
                   onClick={() => navigate(`/listing/${listing.id}`)}
                 >
@@ -152,21 +191,19 @@ export function Browse() {
                     <CategoryBadge category={listing.category} />
                     <StatusBadge status={listing.status} type="availability" />
                   </div>
-                  
+
                   <h3 className="mb-2 line-clamp-2">{listing.title}</h3>
-                  
+
                   <p className="text-text-secondary text-[14px] mb-4 line-clamp-2">
                     {listing.description}
                   </p>
-                  
+
                   <div className="flex items-center justify-between text-[13px]">
                     <span className="text-text-secondary">by {listing.ownerName}</span>
-                    {listing.isPaid && listing.price && (
+                    {listing.isPaid && listing.price != null && (
                       <span className="font-medium text-primary">${listing.price}</span>
                     )}
-                    {!listing.isPaid && (
-                      <span className="font-medium text-green-600">Free</span>
-                    )}
+                    {!listing.isPaid && <span className="font-medium text-green-600">Free</span>}
                   </div>
                 </div>
               ))}

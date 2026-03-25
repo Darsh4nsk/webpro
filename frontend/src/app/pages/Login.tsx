@@ -1,7 +1,9 @@
 import { useState, FormEvent } from 'react';
 import { useNavigate, Link } from 'react-router';
-import { setCurrentUser, mockCommunities } from '../utils/mockData';
-import { User } from '../types';
+import { signInWithEmailAndPassword } from 'firebase/auth';
+import { auth, isFirebaseConfigured } from '../lib/firebase';
+import { FirebaseConfigMissing } from '../components/FirebaseConfigMissing';
+import { formatFirebaseAuthError } from '../lib/authErrors';
 import { Sparkles, ArrowRight } from 'lucide-react';
 import { motion } from 'motion/react';
 
@@ -10,8 +12,9 @@ export function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [submitting, setSubmitting] = useState(false);
 
-  const handleSubmit = (e: FormEvent) => {
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError('');
 
@@ -20,22 +23,23 @@ export function Login() {
       return;
     }
 
-    // Mock login - in production, this would call an API
-    const mockUser: User = {
-      id: '1',
-      name: 'John Doe',
-      email: email,
-      communityId: '1',
-      communityName: mockCommunities[0].name,
-    };
-
-    setCurrentUser(mockUser);
-    navigate('/');
+    setSubmitting(true);
+    try {
+      await signInWithEmailAndPassword(auth, email, password);
+      navigate('/');
+    } catch (err: unknown) {
+      setError(formatFirebaseAuthError(err));
+    } finally {
+      setSubmitting(false);
+    }
   };
+
+  if (!isFirebaseConfigured || !auth) {
+    return <FirebaseConfigMissing />;
+  }
 
   return (
     <div className="min-h-screen relative overflow-hidden flex items-center justify-center px-4">
-      {/* Animated Background */}
       <div className="fixed inset-0 -z-10">
         <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-primary/20 rounded-full blur-3xl animate-pulse" />
         <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-secondary/20 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '1s' }} />
@@ -108,7 +112,8 @@ export function Login() {
 
             <button
               type="submit"
-              className="w-full bg-gradient-to-r from-primary to-secondary text-white py-3.5 rounded-xl font-semibold hover:shadow-xl hover:scale-[1.02] transition-all text-[15px] flex items-center justify-center gap-2 group"
+              disabled={submitting}
+              className="w-full bg-gradient-to-r from-primary to-secondary text-white py-3.5 rounded-xl font-semibold hover:shadow-xl hover:scale-[1.02] transition-all text-[15px] flex items-center justify-center gap-2 group disabled:opacity-60"
             >
               Sign In
               <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
